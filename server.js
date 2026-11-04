@@ -13,7 +13,7 @@ app.use(express.json());
 // Listar Usuários
 app.get("/usuarios", async (req, res) => {
     try {
-        const usuarios = await User.find();
+        const usuarios = await User.find().select("-senha");
         res.json(usuarios);
 
     } catch (error) {
@@ -32,7 +32,7 @@ app.get("/usuarios/:id", async (req, res) => {
             return res.status(400).json({ Error: "ID no formato inválido." });
         }
 
-        const buscarId = await User.findById(id);
+        const buscarId = await User.findById(id).select("-senha");
 
         if (!buscarId) {
             return res.status(404).json({ Error: "Erro ao encontrar Usuário" });
@@ -73,7 +73,10 @@ app.post("/usuarios", async (req, res) => {
             senha: senhaHash
         })
 
-        res.status(201).json(novoUsuario);
+        const usuarioResposta = novoUsuario.toObject();
+        delete usuarioResposta.senha;
+
+        res.status(201).json(usuarioResposta);
 
     } catch (error) {
         console.log(error);
@@ -82,26 +85,46 @@ app.post("/usuarios", async (req, res) => {
 });
 
 // Atualizar Usuário
-app.put("/usuarios/:id", async (req, res) => {
+app.put("/usuarios/:id", autenticarToken, async (req, res) => {
     try {
         const id = req.params.id
         const dados = req.body
+
+        const dadosPermitidos = {
+            nome: dados.nome,
+            email: dados.email,
+            idade: dados.idade
+        }
 
         if (!mongoose.isValidObjectId(id)) {
             return res.status(400).json({ Error: "ID no formato inválido." });
         }
 
+        if(dados.senha) {
+            dados.senha = await bcrypt.hash(dados.senha, 10)
+            dadosPermitidos.senha = dados.senha
+        }
+
+        const idUsuarioLogado = req.user.id
+
+        if(idUsuarioLogado.toString() !== id) {
+            return res.status(403).json({Error: "Você não tem permissão para atualizar este usuário."})
+        }
+
         const atualizarId = await User.findByIdAndUpdate(
             id,
-            dados,
-            { new: true, runValidators: true }
+            dadosPermitidos,
+            { returnDocument: "after", runValidators: true }
         );
 
-        if (!atualizarId) {
+         if (!atualizarId) {
             return res.status(404).json({ Error: "Usuário não encontrado." });
         };
 
-        res.status(200).json(atualizarId);
+        const usuarioAtualizado = atualizarId.toObject();
+        delete usuarioAtualizado.senha
+
+        res.status(200).json(usuarioAtualizado);
 
     } catch (error) {
         console.log(error);
@@ -110,12 +133,18 @@ app.put("/usuarios/:id", async (req, res) => {
 });
 
 // Deletar Usuário
-app.delete("/usuarios/:id", async (req, res) => {
+app.delete("/usuarios/:id", autenticarToken, async (req, res) => {
     try {
         const id = req.params.id
 
         if (!mongoose.isValidObjectId(id)) {
             return res.status(400).json({ Error: "ID no formato inválido." });
+        }
+
+        const idUsuarioLogado = req.user.id
+
+        if(idUsuarioLogado.toString() !== id) {
+            return res.status(403).json({Error: "Você não tem permissão para excluir este usuário."})
         }
 
         const deletarUser = await User.findByIdAndDelete(id);
@@ -124,7 +153,10 @@ app.delete("/usuarios/:id", async (req, res) => {
             return res.status(404).json({ Error: "Erro ao encontrar Usuário" })
         }
 
-        res.status(200).json(deletarUser);
+        const usuarioResposta = deletarUser.toObject();
+        delete usuarioResposta.senha
+
+        res.status(200).json(usuarioResposta);
 
     } catch (error) {
         console.log(error);
@@ -137,6 +169,10 @@ function autenticarToken(req, res, next) {
 
     if(!authHeader) {
         return res.status(401).json({Error: "Token não fornecido."});
+    }
+
+    if(!authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({Error: "Formato de token inválido."})
     }
 
     const token = authHeader.split(" ")[1]
@@ -176,7 +212,7 @@ app.post("/login", async (req, res) => {
         )
 
         if (!senhaCorreta) {
-            return res.status(401).json({ Error: "Senha incorreta." });
+            return res.status(401).json({ Error: "Email e/ou Senha incorretos" });
         }
 
         const token = jwt.sign(
