@@ -2,12 +2,20 @@ import express from "express";
 import mongoose from "mongoose";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { rateLimit } from "express-rate-limit";
 
 import User from "./models/User.js";
 import conectarBanco from "./db.js";
 
 const app = express();
 app.use(express.json());
+
+// Limite de tentativas em Login
+const limiteLogin = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
+    message: "Muitas tentativas de login. Tente novamente mais tarde."
+})
 
 
 // Listar Usuários
@@ -51,6 +59,10 @@ app.post("/usuarios", async (req, res) => {
     try {
         const user = req.body
 
+        if (!user.senha || typeof user.senha !== "string" || user.senha.length < 6) {
+            return res.status(400).json({ Error: "Senha inválida. Mínimo de 6 caracteres." })
+        }
+
         // Validar o cadastro campo nome
         if (!user.nome || typeof user.nome !== "string" || user.nome.trim() === "") {
             return res.status(400).json({ Error: "Nome inválido" });
@@ -65,12 +77,24 @@ app.post("/usuarios", async (req, res) => {
             return res.status(400).json({ Error: " '@' é obrigatório no E-mail" });
         }
 
-        // implementar a criptografia 
+        const emailNormalizado = user.email.trim().toLowerCase()
+
+        const emailExistente = await User.findOne({
+            email: emailNormalizado
+        })
+
+        if (emailExistente) {
+            return res.status(409).json({ Error: "Não foi possível realizar o cadastro com os dados informados." })
+        }
+
+        // implementar criptografia 
         const senhaHash = await bcrypt.hash(user.senha, 10);
 
         const novoUsuario = await User.create({
-            ...user,
-            senha: senhaHash
+            nome: user.nome,
+            email: emailNormalizado,
+            senha: senhaHash,
+            idade: user.idade
         })
 
         const usuarioResposta = novoUsuario.toObject();
@@ -100,15 +124,15 @@ app.put("/usuarios/:id", autenticarToken, async (req, res) => {
             return res.status(400).json({ Error: "ID no formato inválido." });
         }
 
-        if(dados.senha) {
+        if (dados.senha) {
             dados.senha = await bcrypt.hash(dados.senha, 10)
             dadosPermitidos.senha = dados.senha
         }
 
         const idUsuarioLogado = req.user.id
 
-        if(idUsuarioLogado.toString() !== id) {
-            return res.status(403).json({Error: "Você não tem permissão para atualizar este usuário."})
+        if (idUsuarioLogado.toString() !== id) {
+            return res.status(403).json({ Error: "Você não tem permissão para atualizar este usuário." })
         }
 
         const atualizarId = await User.findByIdAndUpdate(
@@ -117,7 +141,7 @@ app.put("/usuarios/:id", autenticarToken, async (req, res) => {
             { returnDocument: "after", runValidators: true }
         );
 
-         if (!atualizarId) {
+        if (!atualizarId) {
             return res.status(404).json({ Error: "Usuário não encontrado." });
         };
 
@@ -143,8 +167,8 @@ app.delete("/usuarios/:id", autenticarToken, async (req, res) => {
 
         const idUsuarioLogado = req.user.id
 
-        if(idUsuarioLogado.toString() !== id) {
-            return res.status(403).json({Error: "Você não tem permissão para excluir este usuário."})
+        if (idUsuarioLogado.toString() !== id) {
+            return res.status(403).json({ Error: "Você não tem permissão para excluir este usuário." })
         }
 
         const deletarUser = await User.findByIdAndDelete(id);
@@ -167,23 +191,23 @@ app.delete("/usuarios/:id", autenticarToken, async (req, res) => {
 function autenticarToken(req, res, next) {
     const authHeader = req.headers.authorization
 
-    if(!authHeader) {
-        return res.status(401).json({Error: "Token não fornecido."});
+    if (!authHeader) {
+        return res.status(401).json({ Error: "Token não fornecido." });
     }
 
-    if(!authHeader.startsWith("Bearer ")) {
-        return res.status(401).json({Error: "Formato de token inválido."})
+    if (!authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ Error: "Formato de token inválido." })
     }
 
     const token = authHeader.split(" ")[1]
-    
+
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET)
         req.user = decoded
         next();
 
-    }catch(error) {
-        return res.status(401).json({Error: "token inválido ou expirado."});
+    } catch (error) {
+        return res.status(401).json({ Error: "token inválido ou expirado." });
     }
 }
 
@@ -196,14 +220,24 @@ app.get("/perfil", autenticarToken, async (req, res) => {
 });
 
 // Login do Usuário
-app.post("/login", async (req, res) => {
+app.post("/login", limiteLogin, async (req, res) => {
     try {
         const user = req.body
 
-        const buscarUsuario = await User.findOne({ email: user.email });
+        if (!user.email || typeof user.email !== "string" || user.email.trim() === "") {
+            return res.status(400).json({ Error: "Preencha os campos." })
+        }
+
+        if (!user.senha || typeof user.senha !== "string" || user.senha.trim() === "") {
+            return res.status(400).json({ Error: "Preencha os campos." })
+        }
+
+        const emailNormalizado = user.email.trim().toLowerCase()
+
+        const buscarUsuario = await User.findOne({ email: emailNormalizado });
 
         if (!buscarUsuario) {
-            return res.status(404).json({ Error: 'Usuário não encontrado' });
+            return res.status(401).json({ Error: "Email e/ou Senha incorretos" });
         }
 
         const senhaCorreta = await bcrypt.compare(
@@ -216,9 +250,9 @@ app.post("/login", async (req, res) => {
         }
 
         const token = jwt.sign(
-            {id: buscarUsuario._id},
+            { id: buscarUsuario._id },
             process.env.JWT_SECRET,
-            {expiresIn: "1h"}
+            { expiresIn: "1h" }
         );
 
         res.status(200).json({
@@ -226,9 +260,9 @@ app.post("/login", async (req, res) => {
             token
         });
 
-    }catch(error) {
+    } catch (error) {
         console.log(error)
-        res.status(500).json({Error: "Erro"});
+        res.status(500).json({ Error: "Erro" });
     }
 });
 
