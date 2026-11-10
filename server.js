@@ -59,10 +59,6 @@ app.post("/usuarios", async (req, res) => {
     try {
         const user = req.body
 
-        if (!user.senha || typeof user.senha !== "string" || user.senha.length < 6) {
-            return res.status(400).json({ Error: "Senha inválida. Mínimo de 6 caracteres." })
-        }
-
         // Validar o cadastro campo nome
         if (!user.nome || typeof user.nome !== "string" || user.nome.trim() === "") {
             return res.status(400).json({ Error: "Nome inválido" });
@@ -73,10 +69,6 @@ app.post("/usuarios", async (req, res) => {
             return res.status(400).json({ Error: "E-mail inválido" });
         }
 
-        if (!user.email.includes("@")) {
-            return res.status(400).json({ Error: " '@' é obrigatório no E-mail" });
-        }
-
         const emailNormalizado = user.email.trim().toLowerCase()
 
         const emailExistente = await User.findOne({
@@ -85,6 +77,26 @@ app.post("/usuarios", async (req, res) => {
 
         if (emailExistente) {
             return res.status(409).json({ Error: "Não foi possível realizar o cadastro com os dados informados." })
+        }
+
+        // Validação de senha
+        const senhaValida = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_])[A-Za-z\d\W_]{8,255}$/.test(user.senha);
+
+        if (!senhaValida) {
+            return res.status(400).json({ Error: "Senha não corresponde ao padrão." });
+        }
+
+        // Validação de E-mail
+        const emailValido = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(emailNormalizado);
+
+        if (!emailValido) {
+            return res.status(400).json({ Error: "O e-mail não corresponde ao padrão." });
+        }
+
+        const tamanhoSenha = Buffer.byteLength(user.senha, "utf8");
+
+        if (tamanhoSenha > 72) {
+            return res.status(400).json({ Error: "A senha ultrapassa o limite permitido." })
         }
 
         // implementar criptografia 
@@ -104,6 +116,9 @@ app.post("/usuarios", async (req, res) => {
 
     } catch (error) {
         console.log(error);
+        if (error.code === 11000) {
+            return res.status(409).json({ Error: "Não foi possível realizar o cadastro com os dados informados." });
+        }
         res.status(500).json({ Error: "Erro ao criar Usuário." });
     }
 });
@@ -124,17 +139,60 @@ app.put("/usuarios/:id", autenticarToken, async (req, res) => {
             return res.status(400).json({ Error: "ID no formato inválido." });
         }
 
-        if (dados.senha) {
-            dados.senha = await bcrypt.hash(dados.senha, 10)
-            dadosPermitidos.senha = dados.senha
-        }
-
-        const idUsuarioLogado = req.user.id
+         const idUsuarioLogado = req.user.id
 
         if (idUsuarioLogado.toString() !== id) {
             return res.status(403).json({ Error: "Você não tem permissão para atualizar este usuário." })
         }
 
+
+        if (dados.senha !== undefined) {
+            if (typeof dados.senha !== "string" || dados.senha.trim() === "") {
+                return res.status(400).json({ Error: "Senha inválida." })
+            }
+
+            // Validação de senha
+            const senhaValida = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_])[A-Za-z\d\W_]{8,255}$/.test(dados.senha);
+
+            if (!senhaValida) {
+                return res.status(400).json({ Error: "Senha não corresponde ao padrão." });
+            }
+
+            const tamanhoSenha = Buffer.byteLength(dados.senha, "utf8");
+            if (tamanhoSenha > 72) {
+                return res.status(400).json({ Error: "A senha ultrapassa o limite permitido." })
+            }
+
+            dadosPermitidos.senha = await bcrypt.hash(dados.senha, 10);
+        }
+
+        if (dados.email !== undefined) {
+
+            if (typeof dados.email !== "string" || dados.email.trim() === "") {
+                return res.status(400).json({ Error: "E-mail inválido." })
+            }
+
+            const emailNormalizado = dados.email.trim().toLowerCase()
+
+            // Validação de E-mail
+            const emailValido = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(emailNormalizado);
+
+            if (!emailValido) {
+                return res.status(400).json({ Error: "O e-mail não corresponde ao padrão." });
+            }
+
+            const emailExistente = await User.findOne({
+                email: emailNormalizado
+            });
+
+            if (emailExistente && idUsuarioLogado !== emailExistente._id.toString()) {
+                return res.status(409).json({ Error: "Não foi possível atualizar com os dados informados." })
+            }
+
+            dadosPermitidos.email = emailNormalizado
+        }
+
+       
         const atualizarId = await User.findByIdAndUpdate(
             id,
             dadosPermitidos,
@@ -152,6 +210,9 @@ app.put("/usuarios/:id", autenticarToken, async (req, res) => {
 
     } catch (error) {
         console.log(error);
+        if (error.code === 11000) {
+            return res.status(409).json({ Error: "Não foi possível atualizar com os dados informados."});
+        }
         res.status(500).json({ Error: "Erro ao atualizar Usuário." });
     }
 });

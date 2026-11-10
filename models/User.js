@@ -7,12 +7,13 @@ const userSchema = new mongoose.Schema({
     },
     email: {
         type: String,
+        unique: true,
         required: true
     }, 
     senha: {
         type: String,
         required: true,
-        minlength: 6
+        minlength: 8
     },
     idade: {
         type: Number,
