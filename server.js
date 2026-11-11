@@ -69,15 +69,24 @@ app.post("/usuarios", async (req, res) => {
             return res.status(400).json({ Error: "E-mail inválido" });
         }
 
-        const emailNormalizado = user.email.trim().toLowerCase()
-
-        const emailExistente = await User.findOne({
-            email: emailNormalizado
-        })
-
-        if (emailExistente) {
-            return res.status(409).json({ Error: "Não foi possível realizar o cadastro com os dados informados." })
+        if (!user.senha || typeof user.senha !== "string" || user.senha.trim() === "") {
+            return res.status(400).json({ Error: "Senha inválida." })
         }
+
+        if (user.idade !== undefined) {
+
+            if (!Number.isInteger(user.idade)) {
+                return res.status(400).json({ Error: "Somente números inteiros." })
+            }
+
+            if (user.idade < 0 || user.idade > 120) {
+                return res.status(400).json({ Error: "Idade deve estar entre 0 e 120 anos." })
+            }
+        }
+
+        const nomeNormalizado = user.nome.trim()
+
+        const emailNormalizado = user.email.trim().toLowerCase()
 
         // Validação de senha
         const senhaValida = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_])[A-Za-z\d\W_]{8,255}$/.test(user.senha);
@@ -99,15 +108,23 @@ app.post("/usuarios", async (req, res) => {
             return res.status(400).json({ Error: "A senha ultrapassa o limite permitido." })
         }
 
+        const emailExistente = await User.findOne({
+            email: emailNormalizado
+        });
+
+        if (emailExistente) {
+            return res.status(409).json({ Error: "Não foi possível realizar o cadastro com os dados informados." })
+        }
+
         // implementar criptografia 
         const senhaHash = await bcrypt.hash(user.senha, 10);
 
         const novoUsuario = await User.create({
-            nome: user.nome,
+            nome: nomeNormalizado,
             email: emailNormalizado,
             senha: senhaHash,
             idade: user.idade
-        })
+        });
 
         const usuarioResposta = novoUsuario.toObject();
         delete usuarioResposta.senha;
@@ -139,7 +156,27 @@ app.put("/usuarios/:id", autenticarToken, async (req, res) => {
             return res.status(400).json({ Error: "ID no formato inválido." });
         }
 
-         const idUsuarioLogado = req.user.id
+        if (dados.nome !== undefined) {
+
+            if (typeof dados.nome !== "string" || dados.nome.trim() === "") {
+                return res.status(400).json({ Error: "Nome inválido." });
+            }
+
+            dadosPermitidos.nome = dados.nome.trim();
+        }
+
+        if (dados.idade !== undefined) {
+
+            if (!Number.isInteger(dados.idade)) {
+                return res.status(400).json({ Error: "Somente números inteiros." })
+            }
+
+            if (dados.idade < 0 || dados.idade > 120) {
+                return res.status(400).json({ Error: "Idade deve estar entre 0 e 120 anos." })
+            }
+        }
+
+        const idUsuarioLogado = req.user.id
 
         if (idUsuarioLogado.toString() !== id) {
             return res.status(403).json({ Error: "Você não tem permissão para atualizar este usuário." })
@@ -192,7 +229,6 @@ app.put("/usuarios/:id", autenticarToken, async (req, res) => {
             dadosPermitidos.email = emailNormalizado
         }
 
-       
         const atualizarId = await User.findByIdAndUpdate(
             id,
             dadosPermitidos,
@@ -211,7 +247,7 @@ app.put("/usuarios/:id", autenticarToken, async (req, res) => {
     } catch (error) {
         console.log(error);
         if (error.code === 11000) {
-            return res.status(409).json({ Error: "Não foi possível atualizar com os dados informados."});
+            return res.status(409).json({ Error: "Não foi possível atualizar com os dados informados." });
         }
         res.status(500).json({ Error: "Erro ao atualizar Usuário." });
     }
