@@ -3,23 +3,45 @@ import mongoose from "mongoose";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { rateLimit } from "express-rate-limit";
+import helmet from "helmet";
+import cors from "cors"
 
 import User from "./models/User.js";
 import conectarBanco from "./db.js";
 
 const app = express();
-app.use(express.json());
+app.use(express.json({
+    limit: "10kb"
+}));
+
+app.use(cors({
+    origin: "http://127.0.0.1:5500"
+}));
+
+app.use(helmet());
 
 // Limite de tentativas em Login
 const limiteLogin = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 5,
     message: "Muitas tentativas de login. Tente novamente mais tarde."
+});
+
+// Limite de tentativas em Cadastro
+const limiteCadastro = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 3,
+    message: "Muitas tentativas de cadastro. Tente novamente mais tarde."
+});
+
+const limiteConsultas = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 15,
+    message: "Limite de consultas esgotado, Tente novamente mais tarde."
 })
 
-
 // Listar Usuários
-app.get("/usuarios", async (req, res) => {
+app.get("/usuarios", limiteConsultas, async (req, res) => {
     try {
         const usuarios = await User.find().select("-senha");
         res.json(usuarios);
@@ -31,7 +53,7 @@ app.get("/usuarios", async (req, res) => {
 });
 
 // Listar Usuário pelo ID
-app.get("/usuarios/:id", async (req, res) => {
+app.get("/usuarios/:id", limiteConsultas, async (req, res) => {
     try {
         const id = req.params.id
 
@@ -55,9 +77,19 @@ app.get("/usuarios/:id", async (req, res) => {
 });
 
 // Criar Usuário
-app.post("/usuarios", async (req, res) => {
+app.post("/usuarios", limiteCadastro, async (req, res) => {
     try {
         const user = req.body
+
+        // validação de campos permitidos 
+        const camposPermitidos = ["nome", "email", "senha", "idade"];
+        const camposRecebidos = Object.keys(user);
+
+        const procurar = camposRecebidos.some(campo => !camposPermitidos.includes(campo));
+
+        if(procurar) {
+            return res.status(400).json({Error: "Campos não permitidos na requisição."})
+        }
 
         // Validar o cadastro campo nome
         if (!user.nome || typeof user.nome !== "string" || user.nome.trim() === "") {
@@ -145,6 +177,17 @@ app.put("/usuarios/:id", autenticarToken, async (req, res) => {
     try {
         const id = req.params.id
         const dados = req.body
+
+        const camposPermitidos= ["nome", "email", "senha", "idade"]
+        const camposRecebidos = Object.keys(dados)
+
+        const procurar = camposRecebidos.some(campo => 
+            !camposPermitidos.includes(campo)
+        )
+
+        if(procurar) {
+            return res.status(400).json({Error: "Campos não permitidos na requisição."})
+        }
 
         const dadosPermitidos = {
             nome: dados.nome,
@@ -308,7 +351,7 @@ function autenticarToken(req, res, next) {
     }
 }
 
-app.get("/perfil", autenticarToken, async (req, res) => {
+app.get("/perfil", autenticarToken, limiteConsultas, async (req, res) => {
     const id = req.user.id
     res.status(200).json({
         message: "Acesso autorizado!",
@@ -360,6 +403,16 @@ app.post("/login", limiteLogin, async (req, res) => {
     } catch (error) {
         console.log(error)
         res.status(500).json({ Error: "Erro" });
+    }
+});
+
+app.use((err, req, res, next) => {
+
+    if (err.status === 413) {
+        return res.status(413).json({ Error: "O tamanho da requisição ultrapassou o limite permitido." })
+    } else {
+        console.error(err)
+        return res.status(500).json({ Error: "Erro interno do servidor." })
     }
 });
 
