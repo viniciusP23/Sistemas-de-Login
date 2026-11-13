@@ -9,6 +9,8 @@ import cors from "cors"
 import User from "./models/User.js";
 import conectarBanco from "./db.js";
 
+mongoose.set("sanitizeFilter", true);
+
 const app = express();
 app.use(express.json({
     limit: "10kb"
@@ -87,8 +89,8 @@ app.post("/usuarios", limiteCadastro, async (req, res) => {
 
         const procurar = camposRecebidos.some(campo => !camposPermitidos.includes(campo));
 
-        if(procurar) {
-            return res.status(400).json({Error: "Campos não permitidos na requisição."})
+        if (procurar) {
+            return res.status(400).json({ Error: "Campos não permitidos na requisição." })
         }
 
         // Validar o cadastro campo nome
@@ -178,15 +180,23 @@ app.put("/usuarios/:id", autenticarToken, async (req, res) => {
         const id = req.params.id
         const dados = req.body
 
-        const camposPermitidos= ["nome", "email", "senha", "idade"]
-        const camposRecebidos = Object.keys(dados)
+        if (Object.keys(dados).length === 0) {
+            return res.status(400).json({ Error: "Campos vazios não são permitidos." })
+        }
 
-        const procurar = camposRecebidos.some(campo => 
+        if (!dados || typeof dados !== "object" || Array.isArray(dados)) {
+            return res.status(400).json({ Error: "O corpo da requisição deve ser um objeto JSON válido." })
+        }
+
+        const camposPermitidos = ["nome", "email", "senha", "idade"]
+        const camposRecebidos = Object.keys(dados);
+
+        const procurar = camposRecebidos.some(campo =>
             !camposPermitidos.includes(campo)
         )
 
-        if(procurar) {
-            return res.status(400).json({Error: "Campos não permitidos na requisição."})
+        if (procurar) {
+            return res.status(400).json({ Error: "Campos não permitidos na requisição." })
         }
 
         const dadosPermitidos = {
@@ -205,7 +215,7 @@ app.put("/usuarios/:id", autenticarToken, async (req, res) => {
                 return res.status(400).json({ Error: "Nome inválido." });
             }
 
-            dadosPermitidos.nome = dados.nome.trim();
+            dadosPermitidos.nome = dados.nome.trim().replace( /\s+/g, " ");
         }
 
         if (dados.idade !== undefined) {
@@ -250,6 +260,10 @@ app.put("/usuarios/:id", autenticarToken, async (req, res) => {
 
             if (typeof dados.email !== "string" || dados.email.trim() === "") {
                 return res.status(400).json({ Error: "E-mail inválido." })
+            }
+
+            if(dados.email.includes(" ")) {
+                return res.status(400).json({Error: "E-mail não pode conter espaços."})
             }
 
             const emailNormalizado = dados.email.trim().toLowerCase()
