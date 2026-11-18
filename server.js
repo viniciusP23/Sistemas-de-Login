@@ -22,6 +22,7 @@ app.use(cors({
 
 app.use(helmet());
 
+
 // Limite de tentativas em Login
 const limiteLogin = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -38,15 +39,45 @@ const limiteCadastro = rateLimit({
 
 const limiteConsultas = rateLimit({
     windowMs: 15 * 60 * 1000,
-    limit: 15,
+    limit: 10,
     message: "Limite de consultas esgotado, Tente novamente mais tarde."
 })
 
 // Listar Usuários
 app.get("/usuarios", limiteConsultas, async (req, res) => {
     try {
-        const usuarios = await User.find().select("-senha");
-        res.json(usuarios);
+
+        const pagina = Number(req.query.pagina ?? 1);
+        const limite = Number(req.query.limite ?? 10);
+        
+        if (!Number.isInteger(pagina) || pagina < 1) {
+            return res.status(400).json({ Error: "Página inválida." });
+        }
+
+        if (!Number.isInteger(limite) || limite < 1 || limite > 50) {
+            return res.status(400).json({ Error: "Limite inválido." });
+        }
+
+        const pular = (pagina - 1) * limite;
+        const totalUsuarios = await User.countDocuments();
+        const totalDePaginas = Math.ceil(totalUsuarios / limite);
+
+        if(pagina > totalDePaginas) {
+            return res.status(400).json({Error: "Página não encontrada."});
+        }
+
+        const usuarios = await User.find()
+            .select("-senha")
+            .skip(pular)
+            .limit(limite);
+
+        res.json({
+            pagina,
+            limite,
+            totalUsuarios,
+            totalDePaginas,
+            usuarios
+        });
 
     } catch (error) {
         console.log(error)
@@ -215,7 +246,7 @@ app.put("/usuarios/:id", autenticarToken, async (req, res) => {
                 return res.status(400).json({ Error: "Nome inválido." });
             }
 
-            dadosPermitidos.nome = dados.nome.trim().replace( /\s+/g, " ");
+            dadosPermitidos.nome = dados.nome.trim().replace(/\s+/g, " ");
         }
 
         if (dados.idade !== undefined) {
@@ -262,8 +293,8 @@ app.put("/usuarios/:id", autenticarToken, async (req, res) => {
                 return res.status(400).json({ Error: "E-mail inválido." })
             }
 
-            if(dados.email.includes(" ")) {
-                return res.status(400).json({Error: "E-mail não pode conter espaços."})
+            if (dados.email.includes(" ")) {
+                return res.status(400).json({ Error: "E-mail não pode conter espaços." })
             }
 
             const emailNormalizado = dados.email.trim().toLowerCase()
