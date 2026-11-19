@@ -49,7 +49,7 @@ app.get("/usuarios", limiteConsultas, async (req, res) => {
 
         const pagina = Number(req.query.pagina ?? 1);
         const limite = Number(req.query.limite ?? 10);
-        
+
         if (!Number.isInteger(pagina) || pagina < 1) {
             return res.status(400).json({ Error: "Página inválida." });
         }
@@ -62,14 +62,16 @@ app.get("/usuarios", limiteConsultas, async (req, res) => {
         const totalUsuarios = await User.countDocuments();
         const totalDePaginas = Math.ceil(totalUsuarios / limite);
 
-        if(pagina > totalDePaginas) {
-            return res.status(400).json({Error: "Página não encontrada."});
+        if (pagina > totalDePaginas && totalUsuarios > 0) {
+            return res.status(400).json({ Error: "Página não encontrada." });
         }
 
         const usuarios = await User.find()
-            .select("-senha")
+            .select("_id nome email")
+            .sort({ _id: 1 })
             .skip(pular)
-            .limit(limite);
+            .limit(limite)
+            .lean();
 
         res.json({
             pagina,
@@ -114,6 +116,10 @@ app.post("/usuarios", limiteCadastro, async (req, res) => {
     try {
         const user = req.body
 
+        if (!user || typeof user !== "object" || Array.isArray(user)) {
+            return res.status(400).json({ Error: "O corpo da requisição deve ser um objeto JSON válido." });
+        }
+
         // validação de campos permitidos 
         const camposPermitidos = ["nome", "email", "senha", "idade"];
         const camposRecebidos = Object.keys(user);
@@ -121,7 +127,7 @@ app.post("/usuarios", limiteCadastro, async (req, res) => {
         const procurar = camposRecebidos.some(campo => !camposPermitidos.includes(campo));
 
         if (procurar) {
-            return res.status(400).json({ Error: "Campos não permitidos na requisição." })
+            return res.status(400).json({ Error: "Campos não permitidos na requisição." });
         }
 
         // Validar o cadastro campo nome
@@ -135,23 +141,23 @@ app.post("/usuarios", limiteCadastro, async (req, res) => {
         }
 
         if (!user.senha || typeof user.senha !== "string" || user.senha.trim() === "") {
-            return res.status(400).json({ Error: "Senha inválida." })
+            return res.status(400).json({ Error: "Senha inválida." });
         }
 
         if (user.idade !== undefined) {
 
             if (!Number.isInteger(user.idade)) {
-                return res.status(400).json({ Error: "Somente números inteiros." })
+                return res.status(400).json({ Error: "Somente números inteiros." });
             }
 
             if (user.idade < 0 || user.idade > 120) {
-                return res.status(400).json({ Error: "Idade deve estar entre 0 e 120 anos." })
+                return res.status(400).json({ Error: "Idade deve estar entre 0 e 120 anos." });
             }
         }
 
-        const nomeNormalizado = user.nome.trim()
+        const nomeNormalizado = user.nome.trim();
 
-        const emailNormalizado = user.email.trim().toLowerCase()
+        const emailNormalizado = user.email.trim().toLowerCase();
 
         // Validação de senha
         const senhaValida = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_])[A-Za-z\d\W_]{8,255}$/.test(user.senha);
@@ -211,12 +217,12 @@ app.put("/usuarios/:id", autenticarToken, async (req, res) => {
         const id = req.params.id
         const dados = req.body
 
-        if (Object.keys(dados).length === 0) {
-            return res.status(400).json({ Error: "Campos vazios não são permitidos." })
-        }
-
         if (!dados || typeof dados !== "object" || Array.isArray(dados)) {
             return res.status(400).json({ Error: "O corpo da requisição deve ser um objeto JSON válido." })
+        }
+
+        if (Object.keys(dados).length === 0) {
+            return res.status(400).json({ Error: "Campos vazios não são permitidos." })
         }
 
         const camposPermitidos = ["nome", "email", "senha", "idade"]
@@ -310,7 +316,7 @@ app.put("/usuarios/:id", autenticarToken, async (req, res) => {
                 email: emailNormalizado
             });
 
-            if (emailExistente && idUsuarioLogado !== emailExistente._id.toString()) {
+            if (emailExistente && idUsuarioLogado.toString() !== emailExistente._id.toString()) {
                 return res.status(409).json({ Error: "Não foi possível atualizar com os dados informados." })
             }
 
@@ -409,6 +415,10 @@ app.post("/login", limiteLogin, async (req, res) => {
     try {
         const user = req.body
 
+        if (!user || typeof user !== "object" || Array.isArray(user)) {
+            return res.status(400).json({ Error: "O corpo da requisição deve ser um objeto JSON válido." });
+        }
+
         if (!user.email || typeof user.email !== "string" || user.email.trim() === "") {
             return res.status(400).json({ Error: "Preencha os campos." })
         }
@@ -447,24 +457,29 @@ app.post("/login", limiteLogin, async (req, res) => {
 
     } catch (error) {
         console.log(error)
-        res.status(500).json({ Error: "Erro" });
+        res.status(500).json({ Error: "Erro interno do servidor." });
     }
 });
 
 app.use((err, req, res, next) => {
 
     if (err.status === 413) {
-        return res.status(413).json({ Error: "O tamanho da requisição ultrapassou o limite permitido." })
+        return res.status(413).json({ Error: "O tamanho da requisição ultrapassou o limite permitido." });
     } else {
         console.error(err)
-        return res.status(500).json({ Error: "Erro interno do servidor." })
+        return res.status(500).json({ Error: "Erro interno do servidor." });
     }
 });
 
 
 async function conectarServer() {
-    await conectarBanco()
-    app.listen(3000, console.log("Servidor Conectado..."))
+    try {
+        await conectarBanco();
+        app.listen(3000, () => console.log("Servidor Conectado..."));
+    }catch(error) {
+        console.log(error);
+        process.exit(1);
+    }
 }
 
 conectarServer();
