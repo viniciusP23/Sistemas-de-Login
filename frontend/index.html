@@ -1,16 +1,19 @@
 <!DOCTYPE html>
 <html lang="pt-br">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="style.css">
     <title>Login | Sistema de Usuários</title>
 </head>
+
 <body>
     <main>
         <section>
             <h1>Bem-vindo</h1>
             <p>Entre ou crie um Usuário agora.</p>
+            <p id="mensagem"></p>
             <form>
                 <label for="email">E-mail</label>
                 <input type="email" name="email" id="email" placeholder="Digite seu E-mail." required>
@@ -21,8 +24,14 @@
                 <button type="submit">Entrar</button>
             </form>
         </section>
+
+        <section id="secaoPerfil">
+            <p id="dadosPerfil">Carregando informações...</p>
+            <button id="btnSair" type="button">Sair</button>
+        </section>
     </main>
 </body>
 
 <script src="script.js" defer></script>
+
 </html>
