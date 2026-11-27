@@ -10,17 +10,19 @@
 
 <body>
     <main>
-        <section>
+        <!-- formulário de Login -->
+        <section id="secaoLogin">
             <h1>Bem-vindo</h1>
             <p>Entre ou crie um Usuário agora.</p>
             <p id="mensagem"></p>
-            <form>
-                <label for="email">E-mail</label>
+            <form id="formLogin">
+                <label for="email">E-mail:</label>
                 <input type="email" name="email" id="email" placeholder="Digite seu E-mail." required>
 
-                <label for="senha">Senha</label>
+                <label for="senha">Senha:</label>
                 <input type="password" name="senha" id="senha" placeholder="Digite sua senha." required>
 
+                <a id="voltarCadastro" class="link-conta" href="#">Não tem uma conta? Cadastre-se</a>
                 <button type="submit">Entrar</button>
             </form>
         </section>
@@ -28,6 +30,27 @@
         <section id="secaoPerfil">
             <p id="dadosPerfil">Carregando informações...</p>
             <button id="btnSair" type="button">Sair</button>
+        </section>
+
+        <!-- formulário de Cadastro -->
+        <section id="secaoCadastro">
+            <form id="formCadastro">
+                <h1>Criar uma conta.</h1>
+
+                <label for="cadastro-nome">Nome:</label>
+                <input id="cadastro-nome" type="text" placeholder="Digite seu nome.">
+
+                <label for="cadastro-email">E-mail:</label>
+                <input id="cadastro-email" type="email" placeholder="Digite seu E-mail.">
+
+                <label for="cadastro-senha">Senha:</label>
+                <input id="cadastro-senha" type="password" placeholder="Digite sua senha.">
+
+                <p id="cadastro-mensagem"></p>
+
+                <a id="voltarLogin" class="link-conta" href="#">Já tenho uma conta.</a>
+                <button type="submit">Cadastrar</button>
+            </form>
         </section>
     </main>
 </body>

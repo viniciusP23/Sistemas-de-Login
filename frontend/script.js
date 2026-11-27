@@ -1,4 +1,5 @@
-const form = document.querySelector("form");
+// Formulário de Login
+const formLogin = document.getElementById("formLogin");
 const email = document.getElementById("email");
 const senha = document.getElementById("senha");
 const mensagem = document.getElementById("mensagem");
@@ -7,9 +8,32 @@ const dadosPerfil = document.getElementById("dadosPerfil");
 const btnSair = document.getElementById("btnSair");
 const secaoPerfil = document.getElementById("secaoPerfil");
 
+// Formulário de Cadastro
+const formCadastro = document.getElementById("formCadastro");
+const nomeCadastro = document.getElementById("cadastro-nome");
+const emailCadastro = document.getElementById("cadastro-email");
+const senhaCadastro = document.getElementById("cadastro-senha");
+
+// Links para voltar do Cadastro/Login
+const secaoLogin = document.getElementById("secaoLogin");
+const secaoCadastro = document.getElementById("secaoCadastro");
+const voltarLogin = document.getElementById("voltarLogin");
+const voltarCadastro = document.getElementById("voltarCadastro");
+
 secaoPerfil.style.display = "none";
 
-form.addEventListener("submit", (event) => {
+voltarLogin.addEventListener("click", () => {
+    secaoLogin.style.display = "block"
+    secaoCadastro.style.display = "none"
+});
+
+voltarCadastro.addEventListener("click", () => {
+    secaoLogin.style.display = "none"
+    secaoCadastro.style.display = "block"
+});
+
+// Formulário Login
+formLogin.addEventListener("submit", (event) => {
     event.preventDefault();
 
     mensagem.textContent = "";
@@ -72,9 +96,10 @@ form.addEventListener("submit", (event) => {
 });
 
 btnSair.addEventListener("click", () => {
+    localStorage.removeItem("token");
     secaoPerfil.style.display = "none";
     dadosPerfil.textContent = ""
-    form.reset();
+    formLogin.reset();
 });
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -98,10 +123,15 @@ document.addEventListener("DOMContentLoaded", () => {
             })
             .then((dados) => {
 
-                if (dados.id) {
+                if (dados && dados.id) {
                     dadosPerfil.textContent = `Seu ID: ${dados.id}`;
                     secaoPerfil.style.display = "block";
                 }
             })
+            .catch((error) => {
+                console.log(error)
+            })
     }
 });
+
+

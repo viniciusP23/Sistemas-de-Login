@@ -72,6 +72,16 @@ input:focus {
     box-shadow: 0 0 0 2px #4f46e5;
 }
 
+.link-conta {
+    color: #fff;
+    text-align: center;
+    padding: 5px;
+}
+
+#secaoCadastro {
+    display: none;
+}
+
 @media (max-width: 480px) {
     section {
         width: 90%;
